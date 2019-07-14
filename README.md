@@ -1,4 +1,8 @@
 # Learning Go
 [![MIT License](https://img.shields.io/badge/license-MIT-007EC7.svg?style=flat)](/LICENSE)
 
+<<<<<<< HEAD
 Here you'll find some code challenges that i solved (and still solving), in many platforms like[hackerhank](https://www.hackerrank.com/), [gophercises](https://gophercises.com/), programming books exercises and the implementation of some data structures and _"famous"_ algorithms in __Go__.
+=======
+In this repo, i'll put some code challenges that i solved (and still solving), in many platforms like [hackerhank](https://www.hackerrank.com/), [gophercises](https://gophercises.com/), programming books exercises, implementation of some data structures and _"famous"_ algorithms in __Go__.
+>>>>>>> 87361de84040f4b9f083ded672006afa9f3a3f66
