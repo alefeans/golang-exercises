@@ -11,27 +11,27 @@ import (
 )
 
 // Complete the solve function below.
-func solve(meal_cost float64, tip_percent int32, tax_percent int32) {
-	tip := meal_cost * (float64(tip_percent) / 100)
-	tax := meal_cost * (float64(tax_percent) / 100)
-	fmt.Println(math.Round(meal_cost + tip + tax))
+func solve(mealCost float64, tipPercent int32, taxPercent int32) float64 {
+	tip := mealCost * (float64(tipPercent) / 100)
+	tax := mealCost * (float64(taxPercent) / 100)
+	return math.Round(mealCost + tip + tax)
 }
 
 func main() {
 	reader := bufio.NewReaderSize(os.Stdin, 1024*1024)
 
-	meal_cost, err := strconv.ParseFloat(readLine(reader), 64)
+	mealCost, err := strconv.ParseFloat(readLine(reader), 64)
 	checkError(err)
 
-	tip_percentTemp, err := strconv.ParseInt(readLine(reader), 10, 64)
+	tipPercentTemp, err := strconv.ParseInt(readLine(reader), 10, 64)
 	checkError(err)
-	tip_percent := int32(tip_percentTemp)
+	tipPercent := int32(tipPercentTemp)
 
-	tax_percentTemp, err := strconv.ParseInt(readLine(reader), 10, 64)
+	taxPercentTemp, err := strconv.ParseInt(readLine(reader), 10, 64)
 	checkError(err)
-	tax_percent := int32(tax_percentTemp)
+	taxPercent := int32(taxPercentTemp)
 
-	solve(meal_cost, tip_percent, tax_percent)
+	fmt.Println(solve(mealCost, tipPercent, taxPercent))
 }
 
 func readLine(reader *bufio.Reader) string {
