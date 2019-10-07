@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"strings"
@@ -31,29 +30,28 @@ func setQuizTimer(timeLimit int, timer chan int) {
 	timer <- 1
 }
 
-func parseCSV(filename string, problem chan Problem) {
+func parseCSV(filename string) [][]string {
 	csvfile, err := os.Open(filename)
 	if err != nil {
 		log.Fatalln("Couldn't open the csv file", err)
 	}
+	defer csvfile.Close()
 
 	r := csv.NewReader(csvfile)
+	records, err := r.ReadAll()
+	if err != nil {
+		log.Fatalln("Couldn't read the csv file", err)
+	}
+	return records
+}
 
-	go func(r *csv.Reader, problem chan Problem) {
-		defer csvfile.Close()
-
-		for {
-			record, err := r.Read()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				log.Fatal(err)
-			}
-			problem <- Problem{question: record[0], answer: record[1]}
-		}
-		close(problem)
-	}(r, problem)
+func problemGenerator(records [][]string) <-chan Problem {
+	ch := make(chan Problem, len(records))
+	for _, problem := range records {
+		ch <- Problem{problem[0], problem[1]}
+	}
+	close(ch)
+	return ch
 }
 
 func readInput(done chan string) {
@@ -64,7 +62,7 @@ func readInput(done chan string) {
 	}
 }
 
-func makeQuestion(problem Problem, timer chan int, input chan string) (int, error) {
+func makeQuestion(problem Problem, timer <-chan int, input <-chan string) (int, error) {
 	fmt.Printf("Problem: %v = ", problem.question)
 	for {
 		select {
@@ -79,11 +77,11 @@ func makeQuestion(problem Problem, timer chan int, input chan string) (int, erro
 	}
 }
 
-func finalScore(score int) {
-	fmt.Printf("\nYou scored %v.", score)
+func finalScore(score, total int) {
+	fmt.Printf("\nYou scored %v out of %v.", score, total)
 }
 
-func startQuiz(problem chan Problem, timer chan int) {
+func startQuiz(total int, problem <-chan Problem, timer <-chan int) {
 	score := 0
 	input := make(chan string)
 	go readInput(input)
@@ -91,14 +89,14 @@ func startQuiz(problem chan Problem, timer chan int) {
 	for {
 		p, ok := <-problem
 		if ok == false {
-			finalScore(score)
+			finalScore(score, total)
 			break
 		}
 
 		result, err := makeQuestion(p, timer, input)
 		if err != nil {
-			finalScore(score)
-			os.Exit(0)
+			finalScore(score, total)
+			break
 		}
 		score += result
 	}
@@ -106,11 +104,11 @@ func startQuiz(problem chan Problem, timer chan int) {
 
 func main() {
 	filename, timeLimit := readArguments()
+	records := parseCSV(filename)
 
-	problem := make(chan Problem)
-	go parseCSV(filename, problem)
-
+	problem := problemGenerator(records)
 	timer := make(chan int)
+
 	go setQuizTimer(timeLimit, timer)
-	startQuiz(problem, timer)
+	startQuiz(len(records), problem, timer)
 }
