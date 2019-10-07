@@ -3,11 +3,13 @@ package main
 import (
 	"bufio"
 	"encoding/csv"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"time"
 )
 
 // Problem struct stores the question and the related answer
@@ -16,10 +18,16 @@ type Problem struct {
 	answer   string
 }
 
-func readArguments() string {
+func readArguments() (string, int) {
 	filename := flag.String("file", "problems.csv", "CSV file with the quiz questions")
+	timeLimit := flag.Int("time", 30, "Time limit to complete the Quiz")
 	flag.Parse()
-	return *filename
+	return *filename, *timeLimit
+}
+
+func timeQuiz(timeLimit int, timer chan int) {
+	time.Sleep(time.Duration(timeLimit) * time.Second)
+	timer <- 1
 }
 
 func openCSV(filename string) *os.File {
@@ -45,31 +53,54 @@ func readCSVProblems(r *csv.Reader) []Problem {
 	return problems
 }
 
-func readInput() string {
-	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Scan()
-	return scanner.Text()
+func readInput(done chan string) {
+	for {
+		scanner := bufio.NewScanner(os.Stdin)
+		scanner.Scan()
+		done <- scanner.Text()
+	}
 }
 
-func startQuiz(problems []Problem) {
-	var total int
-	for i, problem := range problems {
-		fmt.Printf("Problem #%v: %v = ", i+1, problem.question)
-		input := readInput()
-		if input == problem.answer {
-			total++
+func makeQuestion(i int, problem Problem, timer chan int, input chan string) (int, error) {
+
+	fmt.Printf("Problem #%v: %v = ", i, problem.question)
+	for {
+		select {
+		case <-timer:
+			return 0, errors.New("timed out")
+		case resp := <-input:
+			if resp == problem.answer {
+				return 1, nil
+			}
+			return 0, nil
 		}
 	}
-	fmt.Printf("You scored %v out of %v.", total, len(problems))
+
+}
+
+func startQuiz(problems []Problem, timer chan int) {
+	score := 0
+	input := make(chan string)
+	go readInput(input)
+
+	for i, problem := range problems {
+		result, err := makeQuestion(i, problem, timer, input)
+		if err != nil {
+			fmt.Printf("\nYou scored %v out of %v.", score, len(problems))
+			os.Exit(0)
+		}
+		score += result
+	}
 }
 
 func main() {
-	filename := readArguments()
+	filename, timeLimit := readArguments()
 	csvfile := openCSV(filename)
 	defer csvfile.Close()
 
 	r := csv.NewReader(csvfile)
 	problems := readCSVProblems(r)
-
-	startQuiz(problems)
+	timer := make(chan int)
+	go timeQuiz(timeLimit, timer)
+	startQuiz(problems, timer)
 }
