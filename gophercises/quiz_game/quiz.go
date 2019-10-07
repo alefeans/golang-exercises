@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -25,45 +26,46 @@ func readArguments() (string, int) {
 	return *filename, *timeLimit
 }
 
-func timeQuiz(timeLimit int, timer chan int) {
+func setQuizTimer(timeLimit int, timer chan int) {
 	time.Sleep(time.Duration(timeLimit) * time.Second)
 	timer <- 1
 }
 
-func openCSV(filename string) *os.File {
+func parseCSV(filename string, problem chan Problem) {
 	csvfile, err := os.Open(filename)
 	if err != nil {
 		log.Fatalln("Couldn't open the csv file", err)
 	}
-	return csvfile
-}
 
-func readCSVProblems(r *csv.Reader) []Problem {
-	var problems []Problem
-	for {
-		record, err := r.Read()
-		if err == io.EOF {
-			break
+	r := csv.NewReader(csvfile)
+
+	go func(r *csv.Reader, problem chan Problem) {
+		defer csvfile.Close()
+
+		for {
+			record, err := r.Read()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Fatal(err)
+			}
+			problem <- Problem{question: record[0], answer: record[1]}
 		}
-		if err != nil {
-			log.Fatal(err)
-		}
-		problems = append(problems, Problem{question: record[0], answer: record[1]})
-	}
-	return problems
+		close(problem)
+	}(r, problem)
 }
 
 func readInput(done chan string) {
 	for {
 		scanner := bufio.NewScanner(os.Stdin)
 		scanner.Scan()
-		done <- scanner.Text()
+		done <- strings.TrimSpace(scanner.Text())
 	}
 }
 
-func makeQuestion(i int, problem Problem, timer chan int, input chan string) (int, error) {
-
-	fmt.Printf("Problem #%v: %v = ", i, problem.question)
+func makeQuestion(problem Problem, timer chan int, input chan string) (int, error) {
+	fmt.Printf("Problem: %v = ", problem.question)
 	for {
 		select {
 		case <-timer:
@@ -75,18 +77,27 @@ func makeQuestion(i int, problem Problem, timer chan int, input chan string) (in
 			return 0, nil
 		}
 	}
-
 }
 
-func startQuiz(problems []Problem, timer chan int) {
+func finalScore(score int) {
+	fmt.Printf("\nYou scored %v.", score)
+}
+
+func startQuiz(problem chan Problem, timer chan int) {
 	score := 0
 	input := make(chan string)
 	go readInput(input)
 
-	for i, problem := range problems {
-		result, err := makeQuestion(i, problem, timer, input)
+	for {
+		p, ok := <-problem
+		if ok == false {
+			finalScore(score)
+			break
+		}
+
+		result, err := makeQuestion(p, timer, input)
 		if err != nil {
-			fmt.Printf("\nYou scored %v out of %v.", score, len(problems))
+			finalScore(score)
 			os.Exit(0)
 		}
 		score += result
@@ -95,12 +106,11 @@ func startQuiz(problems []Problem, timer chan int) {
 
 func main() {
 	filename, timeLimit := readArguments()
-	csvfile := openCSV(filename)
-	defer csvfile.Close()
 
-	r := csv.NewReader(csvfile)
-	problems := readCSVProblems(r)
+	problem := make(chan Problem)
+	go parseCSV(filename, problem)
+
 	timer := make(chan int)
-	go timeQuiz(timeLimit, timer)
-	startQuiz(problems, timer)
+	go setQuizTimer(timeLimit, timer)
+	startQuiz(problem, timer)
 }
